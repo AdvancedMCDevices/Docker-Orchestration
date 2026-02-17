@@ -1,0 +1,101 @@
+services:
+  # PostgreSQL Database Service (with custom Dockerfile)
+  postgres:
+    build:
+      context: ./postgres
+      dockerfile: Dockerfile
+    container_name: amcd-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      POSTGRES_DB: ${POSTGRES_DB:-amcd_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - amcd-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Example Web Application Service (using pre-built image)
+  # This demonstrates a frontend service without a custom Dockerfile
+  webapp:
+    image: nginx:alpine
+    container_name: amcd-webapp
+    restart: unless-stopped
+    ports:
+      - "${WEBAPP_PORT:-8080}:80"
+    volumes:
+      # Mount a local directory for static content (to be created by users)
+      - ./webapp/html:/usr/share/nginx/html:ro
+    networks:
+      - amcd-network
+    depends_on:
+      - postgres
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Example API Service (using pre-built Node.js image)
+  # This demonstrates a backend service without a custom Dockerfile
+  api:
+    image: node:20-alpine
+    container_name: amcd-api
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "echo 'API service ready. Mount your application code to /app' && tail -f /dev/null"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres_password}@postgres:5432/${POSTGRES_DB:-amcd_db}
+    ports:
+      - "${API_PORT:-3000}:3000"
+    volumes:
+      # Mount local directory for API code (to be created by users)
+      - ./api:/app
+    networks:
+      - amcd-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Example Cache Service (using pre-built Redis image)
+  # This demonstrates a caching layer without a custom Dockerfile
+  # NOTE: For production use, configure Redis with authentication (requirepass)
+  cache:
+    image: redis:7-alpine
+    container_name: amcd-cache
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - amcd-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# Persistent volumes for data storage
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# Custom network for service communication
+networks:
+  amcd-network:
+    driver: bridge
+    name: amcd-network
