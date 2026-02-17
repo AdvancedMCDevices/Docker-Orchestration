@@ -69,13 +69,14 @@ services:
 
   # Example Cache Service (using pre-built Redis image)
   # This demonstrates a caching layer without a custom Dockerfile
+  # NOTE: For production use, configure Redis with authentication (requirepass)
   cache:
     image: redis:7-alpine
     container_name: amcd-cache
     restart: unless-stopped
     command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     networks:
