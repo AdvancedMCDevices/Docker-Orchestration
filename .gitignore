@@ -12,11 +12,19 @@ data/
 Thumbs.db
 
 # IDE files
-.vscode/
 .idea/
 *.swp
 *.swo
 *~
+
+# Ignore everything in the .vscode folder
+.vscode/*
+
+# But don't ignore these specific files
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 
 # Temporary files
 tmp/

@@ -1,0 +1,7 @@
+{
+  "files.associations": {
+    "*.json.example": "json",
+    "*.yml.example": "yaml",
+    "*.toml.example": "toml"
+  }
+}

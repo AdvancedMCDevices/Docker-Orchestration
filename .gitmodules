@@ -1,0 +1,15 @@
+[submodule "src/admin-panel"]
+	path = src/admin-panel
+	url = https://github.com/AdvancedMCDevices/Admin-Panel
+[submodule "src/lobby"]
+	path = src/lobby
+	url = https://github.com/AdvancedMCDevices/Lobby
+[submodule "src/backend"]
+	path = src/backend
+	url = https://github.com/AdvancedMCDevices/Backend
+[submodule "src/project-0"]
+	path = src/project-0
+	url = https://github.com/illiniredstonecomputing/Project-0-Container.git
+[submodule "src/onboarding"]
+	path = src/onboarding
+	url = https://github.com/illiniredstonecomputing/Onboarding-Server.git

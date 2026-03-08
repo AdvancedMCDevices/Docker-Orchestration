@@ -1,0 +1,268 @@
+name: irc-services
+services:
+  # Volume setup service to initialize shared storage with proper subdirectories and permissions
+  volume_init:
+    container_name: volume-init
+    image: alpine
+    volumes:
+      - managed-files:/mnt/data
+    # This command creates the subdirectories and sets permissions
+    command: >
+      sh -c "mkdir -p /mnt/data/velocity /mnt/data/lobby /mnt/data/survival /mnt/data/onboarding /mnt/data/mchprs /mnt/data/project-0 /mnt/data/log_files /mnt/data/filebrowser && 
+         chmod -R 777 /mnt/data"
+
+  # PostgreSQL Database Service (with custom Dockerfile)
+  postgres:
+    build:
+      context: ./src/postgres
+    container_name: postgres-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      POSTGRES_DB: ${POSTGRES_DB:-amcd_db}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - irc-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Example Web Application Service (using pre-built image)
+  # This demonstrates a frontend service without a custom Dockerfile
+  admin-panel:
+    build:
+      context: ./src/admin-panel
+    container_name: admin-panel
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_PANEL_PORT:-5000}:3000"
+    networks:
+      - irc-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:5000",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  filebrowser:
+    build: ./src/filebrowser
+    container_name: filebrowser
+    restart: unless-stopped
+    ports:
+      - "${FILE_BROWSER_PORT:-8080}:80"
+    volumes:
+      # Mount a local directory for file browser data (to be created by users)
+      - managed-files:/srv
+      - filebrowser-db:/database/
+    networks:
+      - irc-network
+    depends_on:
+      volume_init:
+        condition: service_completed_successfully
+
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: dockerfile
+    container_name: backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    environment:
+      API_SECRET: ${API_SECRET:-supersecretkey}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres_password}@postgres:5432/${POSTGRES_DB:-irc_db}
+    networks:
+      - irc-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  velocity:
+    build: ./src/velocity
+    container_name: velocity
+    ports:
+      - "${VELOCITY_PORT:-25565}:25565"
+    environment:
+      - VELOCITY_SECRET=${VELOCITY_SECRET:-velocitysecret}
+    volumes:
+      - type: volume
+        source: managed-files
+        target: /server
+        volume:
+          subpath: velocity
+    networks:
+      - irc-network
+    depends_on:
+      backend:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      volume_init:
+        condition: service_completed_successfully
+
+  # ! ALL MINECRAFT SERVERS SHOULD BE ADDED BELOW THIS LINE
+
+  lobby:
+    build: ./src/lobby
+    container_name: lobby-server
+    volumes:
+      - type: volume
+        source: managed-files
+        target: /data
+        volume:
+          subpath: lobby
+    environment:
+      - JAVA_OPTS=${JAVA_OPTS:--Xmx2G -Xms1G}
+      - VELOCITY_SECRET=${VELOCITY_SECRET:-velocitysecret}
+    networks:
+      - irc-network
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    depends_on:
+      velocity:
+        condition: service_healthy
+      volume_init:
+        condition: service_completed_successfully
+
+  survival:
+    build: ./src/survival
+    container_name: survival-server
+    volumes:
+      - type: volume
+        source: managed-files
+        target: /data
+        volume:
+          subpath: survival
+    environment:
+      - JAVA_OPTS=${JAVA_OPTS:--Xmx2G -Xms1G}
+      - VELOCITY_SECRET=${VELOCITY_SECRET:-velocitysecret}
+    networks:
+      - irc-network
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    depends_on:
+      velocity:
+        condition: service_healthy
+      volume_init:
+        condition: service_completed_successfully
+
+  onboarding:
+    build: ./src/onboarding
+    container_name: onboarding-server
+    volumes:
+      - type: volume
+        source: managed-files
+        target: /data
+        volume:
+          subpath: onboarding
+    environment:
+      - JAVA_OPTS=${JAVA_OPTS:--Xmx2G -Xms1G}
+      - VELOCITY_SECRET=${VELOCITY_SECRET:-velocitysecret}
+    networks:
+      - irc-network
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    depends_on:
+      velocity:
+        condition: service_healthy
+      volume_init:
+        condition: service_completed_successfully
+
+  mchprs:
+    build: ./src/mchprs
+    container_name: mchprs-server
+    volumes:
+      - type: volume
+        source: managed-files
+        target: /data
+        volume:
+          subpath: mchprs
+    environment:
+      - JAVA_OPTS=${JAVA_OPTS:--Xmx2G -Xms1G}
+      - VELOCITY_SECRET=${VELOCITY_SECRET:-velocitysecret}
+    networks:
+      - irc-network
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    depends_on:
+      velocity:
+        condition: service_healthy
+      volume_init:
+        condition: service_completed_successfully
+
+  # ! ALL PROJECT SERVERS SHOULD BE ADDED BELOW THIS LINE
+
+  project-0:
+    build: ./src/project-0
+    container_name: project-0-server
+    volumes:
+      - type: volume
+        source: managed-files
+        target: /data
+        volume:
+          subpath: project-0
+    environment:
+      - JAVA_OPTS=${JAVA_OPTS:--Xmx2G -Xms1G}
+      - VELOCITY_SECRET=${VELOCITY_SECRET:-velocitysecret}
+    networks:
+      - irc-network
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    depends_on:
+      velocity:
+        condition: service_healthy
+      volume_init:
+        condition: service_completed_successfully
+
+# Persistent volumes for data storage
+volumes:
+  managed-files:
+    driver: local
+
+  postgres-data:
+    driver: local
+
+  filebrowser-db:
+    driver: local
+
+# Custom network for service communication
+networks:
+  irc-network:
+    driver: bridge
+    name: irc-network
