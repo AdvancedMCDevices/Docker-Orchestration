@@ -3,7 +3,7 @@ set -e
 
 echo "Copying secrets..."
 
-sed -i "s/\${VELOCITY_SECRET}/$VELOCITY_SECRET/g" /FabricProxy-Lite.toml
+sed -i "s/\${VELOCITY_SECRET}/$VELOCITY_SECRET/g" /usr/src/init_data/config/FabricProxy-Lite.toml
 
 echo "Checking for missing server files..."
 
