@@ -4,12 +4,10 @@
 # Server runtime files
 server/world/*
 server/logs/*
-server/config/*
 
 # But keep the directories
 !server/world/.gitkeep
 !server/logs/.gitkeep
-!server/config/.gitkeep
 
 # Server generated files
 server/*.jar

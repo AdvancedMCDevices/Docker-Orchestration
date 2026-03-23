@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+echo "Injecting secrets..."
+
+sed -i "s/\${VELOCITY_SECRET}/$VELOCITY_SECRET/g" /usr/src/init_data/forwarding.secret
+
 echo "Checking for missing server files..."
 
 # Use 'cp -n' to copy ONLY if the file doesn't exist in the volume

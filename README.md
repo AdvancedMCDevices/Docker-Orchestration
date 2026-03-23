@@ -1,3 +1,10 @@
+<!--
+TODO:
+- Specify configuration structure (env vars stored in .env and loaded with envsubst, non environment-specific config written directly in the config files)
+- Rewrite to reflect the actual set of containers
+- Add instructions for running on docker
+-->
+
 # Docker-Orchestration
 
 Network of containers running the bulk of AMcD services built on Docker Compose.

@@ -1,6 +1,7 @@
 name: irc-services
 services:
   # Volume setup service to initialize shared storage with proper subdirectories and permissions
+  # ! Any service that depends on the "managed-files" volume should depend on this service to ensure the directory structure is created before they start
   volume_init:
     container_name: volume-init
     image: alpine
@@ -8,8 +9,33 @@ services:
       - managed-files:/mnt/data
     # This command creates the subdirectories and sets permissions
     command: >
-      sh -c "mkdir -p /mnt/data/velocity /mnt/data/lobby /mnt/data/survival /mnt/data/onboarding /mnt/data/mchprs /mnt/data/project-0 /mnt/data/log_files /mnt/data/filebrowser && 
+      sh -c "mkdir -p /mnt/data/velocity /mnt/data/lobby /mnt/data/survival /mnt/data/onboarding /mnt/data/mchprs /mnt/data/project-0 && 
          chmod -R 777 /mnt/data"
+
+  # Daily backup service that creates compressed archives of all managed volumes and uploads them to S3-compatible storage
+  backup:
+    container_name: backup
+    image: offen/docker-volume-backup:latest
+    restart: unless-stopped
+    env_file:
+      - backup.config
+    volumes:
+      - type: volume
+        source: managed-files
+        target: /data/survival
+        volume:
+          subpath: survival
+      - type: volume
+        source: managed-files
+        target: /data/project-0
+        volume:
+          subpath: project-0
+      - /var/run/docker.sock:/var/run/docker.sock:ro # Docker socket needed to stop/start containers during backup
+    networks:
+      - irc-network
+    depends_on:
+      volume_init:
+        condition: service_completed_successfully
 
   # PostgreSQL Database Service (with custom Dockerfile)
   postgres:
@@ -18,22 +44,47 @@ services:
     container_name: postgres-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
-      POSTGRES_DB: ${POSTGRES_DB:-amcd_db}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - irc-network
+
+  # NestJS backend service
+  backend:
+    build:
+      context: ./src/backend
+    container_name: backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    environment:
+      - API_SECRET=${API_SECRET:-apisecret}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+    networks:
+      - irc-network
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
 
-  # Example Web Application Service (using pre-built image)
-  # This demonstrates a frontend service without a custom Dockerfile
+  # SvelteKit frontend admin panel service
   admin-panel:
     build:
       context: ./src/admin-panel
@@ -41,6 +92,8 @@ services:
     restart: unless-stopped
     ports:
       - "${ADMIN_PANEL_PORT:-5000}:3000"
+    environment:
+      - API_SECRET=${API_SECRET:-apisecret}
     networks:
       - irc-network
     depends_on:
@@ -62,6 +115,7 @@ services:
       timeout: 10s
       retries: 3
 
+  # File Browser service for managing volumes through a web interface
   filebrowser:
     build: ./src/filebrowser
     container_name: filebrowser
@@ -72,49 +126,30 @@ services:
       # Mount a local directory for file browser data (to be created by users)
       - managed-files:/srv
       - filebrowser-db:/database/
+    labels:
+      - docker-volume-backup.stop-during-backup=true
     networks:
       - irc-network
     depends_on:
       volume_init:
         condition: service_completed_successfully
+      backend:
+        condition: service_healthy # Cannot login without running backend
 
-  backend:
-    build:
-      context: ./src/backend
-      dockerfile: dockerfile
-    container_name: backend
-    restart: unless-stopped
-    ports:
-      - "${BACKEND_PORT:-3000}:3000"
-    environment:
-      API_SECRET: ${API_SECRET:-supersecretkey}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres_password}@postgres:5432/${POSTGRES_DB:-irc_db}
-    networks:
-      - irc-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--quiet",
-          "--tries=1",
-          "--spider",
-          "http://localhost:3000",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
+  # Proxy for Minecraft servers
   velocity:
-    build: ./src/velocity
+    build:
+      context: ./src/velocity
+      args:
+        - VELOCITY_SECRET=${VELOCITY_SECRET:-velocitysecret}
     container_name: velocity
     ports:
       - "${VELOCITY_PORT:-25565}:25565"
     environment:
+      - JAVA_OPTS=${JAVA_OPTS:--Xmx2G -Xms1G}
       - VELOCITY_SECRET=${VELOCITY_SECRET:-velocitysecret}
+    labels:
+      - docker-volume-backup.stop-during-backup=true
     volumes:
       - type: volume
         source: managed-files
@@ -134,7 +169,8 @@ services:
   # ! ALL MINECRAFT SERVERS SHOULD BE ADDED BELOW THIS LINE
 
   lobby:
-    build: ./src/lobby
+    build:
+      context: ./src/lobby
     container_name: lobby-server
     volumes:
       - type: volume
@@ -145,6 +181,8 @@ services:
     environment:
       - JAVA_OPTS=${JAVA_OPTS:--Xmx2G -Xms1G}
       - VELOCITY_SECRET=${VELOCITY_SECRET:-velocitysecret}
+    labels:
+      - docker-volume-backup.stop-during-backup=true
     networks:
       - irc-network
     stdin_open: true
@@ -153,11 +191,14 @@ services:
     depends_on:
       velocity:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
       volume_init:
         condition: service_completed_successfully
 
   survival:
-    build: ./src/survival
+    build:
+      context: ./src/survival
     container_name: survival-server
     volumes:
       - type: volume
@@ -168,19 +209,22 @@ services:
     environment:
       - JAVA_OPTS=${JAVA_OPTS:--Xmx2G -Xms1G}
       - VELOCITY_SECRET=${VELOCITY_SECRET:-velocitysecret}
+    labels:
+      - docker-volume-backup.stop-during-backup=true
     networks:
       - irc-network
     stdin_open: true
     tty: true
     restart: unless-stopped
     depends_on:
-      velocity:
+      postgres:
         condition: service_healthy
       volume_init:
         condition: service_completed_successfully
 
   onboarding:
-    build: ./src/onboarding
+    build:
+      context: ./src/onboarding
     container_name: onboarding-server
     volumes:
       - type: volume
@@ -191,6 +235,8 @@ services:
     environment:
       - JAVA_OPTS=${JAVA_OPTS:--Xmx2G -Xms1G}
       - VELOCITY_SECRET=${VELOCITY_SECRET:-velocitysecret}
+    labels:
+      - docker-volume-backup.stop-during-backup=true
     networks:
       - irc-network
     stdin_open: true
@@ -199,11 +245,14 @@ services:
     depends_on:
       velocity:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
       volume_init:
         condition: service_completed_successfully
 
   mchprs:
-    build: ./src/mchprs
+    build:
+      context: ./src/mchprs
     container_name: mchprs-server
     volumes:
       - type: volume
@@ -214,6 +263,8 @@ services:
     environment:
       - JAVA_OPTS=${JAVA_OPTS:--Xmx2G -Xms1G}
       - VELOCITY_SECRET=${VELOCITY_SECRET:-velocitysecret}
+    labels:
+      - docker-volume-backup.stop-during-backup=true
     networks:
       - irc-network
     stdin_open: true
@@ -222,13 +273,16 @@ services:
     depends_on:
       velocity:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
       volume_init:
         condition: service_completed_successfully
 
   # ! ALL PROJECT SERVERS SHOULD BE ADDED BELOW THIS LINE
 
   project-0:
-    build: ./src/project-0
+    build:
+      context: ./src/project-0
     container_name: project-0-server
     volumes:
       - type: volume
@@ -239,6 +293,8 @@ services:
     environment:
       - JAVA_OPTS=${JAVA_OPTS:--Xmx2G -Xms1G}
       - VELOCITY_SECRET=${VELOCITY_SECRET:-velocitysecret}
+    labels:
+      - docker-volume-backup.stop-during-backup=true
     networks:
       - irc-network
     stdin_open: true
@@ -247,11 +303,15 @@ services:
     depends_on:
       velocity:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
       volume_init:
         condition: service_completed_successfully
 
 # Persistent volumes for data storage
 volumes:
+  # All volumes that need to be managed by the file browser should be subdirectories of this "managed-files" volume.
+  # This allows us to easily backup/restore all files through the file browser and ensures proper permissions are set by the volume_init service.
   managed-files:
     driver: local
 

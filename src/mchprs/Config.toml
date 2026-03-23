@@ -16,15 +16,17 @@ enabled = true
 # NOT the path to the file.
 secret = "${VELOCITY_SECRET}"
 
-# LuckPerms Configuration
-[luckperms]
-# Define the address for the database.
-host = "postgres:5432"
-# The name of the database the LuckPerms data is in.
-db_name = "${POSTGRES_DB}"
-# Credentials for the database.
-username = "${POSTGRES_USER}"
-password = "${POSTGRES_PASSWORD}"
-# The name of the server, used for server specific permissions.
-# See: https://luckperms.net/wiki/Context
-server_context = "global"
+#! Uncomment this only when luckperms use has been fully figured out and integrated across all servers
+
+# # LuckPerms Configuration
+# [luckperms]
+# # Define the address for the database.
+# host = "postgres:5432"
+# # The name of the database the LuckPerms data is in.
+# db_name = "${POSTGRES_DB}"
+# # Credentials for the database.
+# username = "${POSTGRES_USER}"
+# password = "${POSTGRES_PASSWORD}"
+# # The name of the server, used for server specific permissions.
+# # See: https://luckperms.net/wiki/Context
+# server_context = "global"
