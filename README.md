@@ -13,6 +13,15 @@ Network of containers running the bulk of AMcD services built on Docker Compose.
 
 **Only run this setup on a machine that already contains the built AMcD minecraft-server-image image. If you have not built this image yet, please follow ![the build instructions](https://github.com/AdvancedMCDevices/minecraft-server-image/blob/master/README.md) before proceeding.**
 
+## Documentation
+
+Full documentation is available in the [`docs/`](docs/README.md) folder:
+
+- [General Usage](docs/general-usage.md) — starting, stopping, and day-to-day management
+- [Deployment Customization](docs/deployment-customization.md) — environment variables, ports, volumes, and backup configuration
+- [Updating](docs/updating.md) — updating services, base images, and the full stack
+- [Adding Minecraft Servers](docs/adding-minecraft-servers.md) — step-by-step guide to add a new server
+
 ## Overview
 
 This repository provides a Docker Compose framework for orchestrating AMcD services. The stack includes a PostgreSQL database built from a custom Dockerfile, an admin panel, a file browser, a placeholder API container, a Velocity proxy, and Minecraft server containers.
