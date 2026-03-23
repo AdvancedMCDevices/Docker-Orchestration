@@ -32,7 +32,7 @@ This stack is defined in [compose.yml](compose.yml) and currently includes:
 
 ```bash
 git clone https://github.com/IlliniRedstoneComputing/Docker-Orchestration.git
-git submodule update --init --recursive
+git submodule update --init --recursive --remote
 cd Docker-Orchestration
 ```
 
