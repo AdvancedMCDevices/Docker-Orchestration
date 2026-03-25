@@ -22,12 +22,12 @@ services:
     volumes:
       - type: volume
         source: managed-files
-        target: /data/survival
+        target: /backup/survival
         volume:
           subpath: survival
       - type: volume
         source: managed-files
-        target: /data/project-0
+        target: /backup/project-0
         volume:
           subpath: project-0
       - /var/run/docker.sock:/var/run/docker.sock:ro # Docker socket needed to stop/start containers during backup
