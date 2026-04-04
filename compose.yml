@@ -9,7 +9,7 @@ services:
       - managed-files:/mnt/data
     # This command creates the subdirectories and sets permissions
     command: >
-      sh -c "mkdir -p /mnt/data/velocity /mnt/data/lobby /mnt/data/survival /mnt/data/onboarding /mnt/data/mchprs /mnt/data/project-0 && 
+      sh -c "mkdir -p /mnt/data/velocity /mnt/data/lobby /mnt/data/survival /mnt/data/onboarding /mnt/data/mchprs /mnt/data/project-0 /mnt/data/project-1 && 
          chmod -R 777 /mnt/data"
 
   # Daily backup service that creates compressed archives of all managed volumes and uploads them to S3-compatible storage
@@ -30,6 +30,11 @@ services:
         target: /backup/project-0
         volume:
           subpath: project-0
+      - type: volume
+        source: managed-files
+        target: /backup/project-1
+        volume:
+          subpath: project-1
       - /var/run/docker.sock:/var/run/docker.sock:ro # Docker socket needed to stop/start containers during backup
     networks:
       - irc-network
@@ -290,6 +295,34 @@ services:
         target: /data
         volume:
           subpath: project-0
+    environment:
+      - JAVA_OPTS=${JAVA_OPTS:--Xmx2G -Xms1G}
+      - VELOCITY_SECRET=${VELOCITY_SECRET:-velocitysecret}
+    labels:
+      - docker-volume-backup.stop-during-backup=true
+    networks:
+      - irc-network
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    depends_on:
+      velocity:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      volume_init:
+        condition: service_completed_successfully
+
+  project-1:
+    build:
+      context: ./src/project-1
+    container_name: project-1-server
+    volumes:
+      - type: volume
+        source: managed-files
+        target: /data
+        volume:
+          subpath: project-1
     environment:
       - JAVA_OPTS=${JAVA_OPTS:--Xmx2G -Xms1G}
       - VELOCITY_SECRET=${VELOCITY_SECRET:-velocitysecret}

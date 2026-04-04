@@ -13,3 +13,6 @@
 [submodule "src/onboarding"]
 	path = src/onboarding
 	url = https://github.com/illiniredstonecomputing/Onboarding-Server.git
+[submodule "src/project-1"]
+	path = src/project-1
+	url = https://github.com/illiniredstonecomputing/Project-1-Container.git

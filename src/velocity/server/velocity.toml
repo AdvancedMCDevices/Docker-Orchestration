@@ -83,6 +83,7 @@ onboarding = "onboarding-server:25565"
 mchprs = "mchprs-server:25565"
 # Project servers
 project-0 = "project-0-server:25565"
+project-1 = "project-1-server:25565"
 
 
 # In what order we should try servers when a player logs in or is kicked from a server.
